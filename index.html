@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>connec+a QR受付</title>
+  <link href="https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    :root{
+      --ai-deep:#1a2744;--ai-mid:#2a4a7f;--ai-soft:#4a6fa5;--ai-pale:#d4e4f7;
+      --haru:#f4b8cb;--natsu:#7b5ea7;--aki:#d4511a;--fuyu:#b8d4f0;--matcha:#4e7252;
+    }
+    body{font-family:'Noto Sans JP',sans-serif;background:var(--ai-deep);color:#fff;min-height:100vh;overflow-x:hidden;}
+    body::before{
+      content:'';position:fixed;inset:0;
+      background:
+        radial-gradient(ellipse 50% 40% at 0% 0%,rgba(244,184,203,.1) 0%,transparent 60%),
+        radial-gradient(ellipse 40% 40% at 100% 0%,rgba(123,94,167,.1) 0%,transparent 60%),
+        radial-gradient(ellipse 50% 40% at 100% 100%,rgba(212,81,26,.08) 0%,transparent 60%),
+        radial-gradient(ellipse 40% 40% at 0% 100%,rgba(184,212,240,.1) 0%,transparent 60%);
+      pointer-events:none;
+    }
+    body::after{
+      content:'';position:fixed;inset:0;
+      background-image:url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 2 L38 20 L20 38 L2 20 Z' fill='none' stroke='rgba(255,255,255,.025)' stroke-width='1'/%3E%3C/svg%3E");
+      pointer-events:none;
+    }
+    .header{
+      position:sticky;top:0;z-index:100;
+      background:rgba(26,39,68,.92);backdrop-filter:blur(20px);
+      border-bottom:1px solid rgba(255,255,255,.06);
+      height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;
+    }
+    .header__brand{display:flex;align-items:center;gap:10px;}
+    .header__logo{
+      width:32px;height:32px;background:rgba(255,255,255,.08);border-radius:7px;
+      border:1px solid rgba(255,255,255,.12);
+      display:flex;align-items:center;justify-content:center;
+      font-family:'Zen Old Mincho',serif;font-size:.6rem;color:rgba(255,255,255,.8);font-weight:700;
+    }
+    .header__title{font-family:'Zen Old Mincho',serif;font-size:.95rem;color:rgba(255,255,255,.85);letter-spacing:.08em;}
+    .season-dots{display:flex;gap:3px;}
+    .sd{width:6px;height:6px;border-radius:50%;}
+
+    .lang-sel{
+      padding:5px 10px;border-radius:99px;font-size:.72rem;
+      border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);
+      color:rgba(255,255,255,.7);cursor:pointer;outline:none;
+      font-family:'Noto Sans JP',sans-serif;
+    }
+    .lang-sel option{background:#1a2744;color:#fff;}
+
+    .season-bar{height:2px;display:flex;background:linear-gradient(90deg,var(--haru),var(--natsu),var(--aki),var(--fuyu));}
+
+    .container{max-width:480px;margin:0 auto;padding:24px 16px;position:relative;z-index:1;}
+
+    .cache-bar{
+      background:rgba(78,114,82,.2);border:1px solid rgba(78,114,82,.3);
+      border-radius:99px;padding:7px 16px;font-size:.72rem;color:#8ecf94;
+      margin-bottom:16px;display:none;align-items:center;gap:8px;
+    }
+    .cache-dot{width:6px;height:6px;border-radius:50%;background:#8ecf94;animation:cpulse 2s infinite;}
+    @keyframes cpulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+    .scan-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:20px;margin-bottom:14px;}
+    .scan-viewport{width:100%;aspect-ratio:1;border-radius:12px;overflow:hidden;background:#000;position:relative;}
+    .scan-viewport video{width:100%;height:100%;object-fit:cover;}
+    .scan-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+    .scan-frame-wrap{position:relative;width:200px;height:200px;}
+    .scan-frame{width:200px;height:200px;border:2px solid rgba(255,255,255,.25);border-radius:12px;box-shadow:0 0 0 2000px rgba(0,0,0,.5);}
+    .sf-c{position:absolute;width:16px;height:16px;}
+    .sf-tl{top:-1px;left:-1px;border-top:3px solid var(--haru);border-left:3px solid var(--haru);border-radius:3px 0 0 0;}
+    .sf-tr{top:-1px;right:-1px;border-top:3px solid var(--natsu);border-right:3px solid var(--natsu);border-radius:0 3px 0 0;}
+    .sf-bl{bottom:-1px;left:-1px;border-bottom:3px solid var(--aki);border-left:3px solid var(--aki);border-radius:0 0 0 3px;}
+    .sf-br{bottom:-1px;right:-1px;border-bottom:3px solid var(--fuyu);border-right:3px solid var(--fuyu);border-radius:0 0 3px 0;}
+    .scan-line{position:absolute;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(212,228,247,.7),transparent);animation:sl 2s ease-in-out infinite;display:none;}
+    @keyframes sl{0%{top:5%;}100%{top:95%;}}
+    .scanning .scan-line{display:block;}
+
+    .scan-status{
+      text-align:center;padding:11px;border-radius:10px;
+      font-size:.85rem;font-weight:600;margin-top:12px;min-height:44px;
+      display:flex;align-items:center;justify-content:center;gap:8px;transition:all .3s;
+    }
+    .scan-status.idle   {background:rgba(255,255,255,.04);color:rgba(255,255,255,.35);}
+    .scan-status.ok     {background:rgba(78,114,82,.2);color:#8ecf94;}
+    .scan-status.error  {background:rgba(212,81,26,.15);color:#f4916a;}
+    .scan-status.warning{background:rgba(232,200,74,.1);color:#e8c84a;}
+    .scan-status.sending{background:rgba(74,111,165,.15);color:var(--ai-pale);}
+
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:10px 20px;border-radius:99px;font-size:.85rem;font-weight:700;cursor:pointer;border:none;transition:all .25s;font-family:'Noto Sans JP',sans-serif;}
+    .btn-shiro{background:#fff;color:var(--ai-deep);box-shadow:0 3px 12px rgba(255,255,255,.12);}
+    .btn-shiro:hover{transform:translateY(-1px);box-shadow:0 5px 16px rgba(255,255,255,.18);}
+    .btn-ghost{background:rgba(255,255,255,.06);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.1);}
+    .btn-ghost:hover{background:rgba(255,255,255,.1);}
+    .btn-matcha{background:var(--matcha);color:#fff;}
+    .btn-row{display:flex;gap:8px;margin-top:12px;}
+    .btn:disabled{opacity:.4;cursor:not-allowed;transform:none!important;}
+
+    .form-control{width:100%;padding:10px 14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;font-size:.875rem;outline:none;transition:all .2s;font-family:'Noto Sans JP',sans-serif;}
+    .form-control:focus{border-color:var(--ai-pale);background:rgba(255,255,255,.08);}
+    .form-control::placeholder{color:rgba(255,255,255,.25);}
+
+    .history-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:20px;}
+    .history-title{font-family:'Zen Old Mincho',serif;font-size:.82rem;color:rgba(255,255,255,.35);letter-spacing:.14em;margin-bottom:12px;text-align:center;}
+    .history-list{max-height:200px;overflow-y:auto;}
+    .history-item{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:.82rem;}
+    .history-item:last-child{border-bottom:none;}
+    .history-time{color:rgba(255,255,255,.3);font-size:.72rem;}
+    .history-empty{text-align:center;color:rgba(255,255,255,.2);padding:24px;font-size:.82rem;}
+
+    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;z-index:300;padding:16px;}
+    .result-card{border-radius:20px;padding:36px 28px;text-align:center;max-width:320px;width:100%;animation:popIn .4s cubic-bezier(.34,1.56,.64,1) both;}
+    @keyframes popIn{from{transform:scale(.75);opacity:0;}to{transform:scale(1);opacity:1;}}
+    .result-card.success{background:linear-gradient(135deg,rgba(78,114,82,.4),rgba(26,39,68,.85));border:1px solid rgba(78,114,82,.4);}
+    .result-card.error  {background:linear-gradient(135deg,rgba(212,81,26,.3),rgba(26,39,68,.85));border:1px solid rgba(212,81,26,.3);}
+    .result-card.warning{background:linear-gradient(135deg,rgba(123,94,167,.3),rgba(26,39,68,.85));border:1px solid rgba(123,94,167,.4);}
+    .result-icon{font-size:.1rem;width:56px;height:56px;border-radius:50%;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;}
+    .result-icon-ok  {background:rgba(78,114,82,.4);box-shadow:0 0 20px rgba(78,114,82,.4);}
+    .result-icon-err {background:rgba(212,81,26,.3);}
+    .result-icon-warn{background:rgba(123,94,167,.3);}
+    .result-icon svg{width:28px;height:28px;}
+    .result-name{font-size:1.35rem;font-weight:800;color:#fff;margin-bottom:8px;}
+    .result-sub{color:rgba(255,255,255,.5);font-size:.875rem;margin-bottom:20px;}
+    .payment-steps{text-align:left;background:rgba(255,255,255,.06);border-radius:10px;padding:14px;margin:14px 0;font-size:.82rem;line-height:2;color:rgba(255,255,255,.75);}
+    .payment-btn-row{display:flex;gap:8px;margin-top:8px;}
+  </style>
+</head>
+<body>
+<div class="season-bar"></div>
+<header class="header">
+  <div class="header__brand">
+    <div class="header__logo">c+a</div>
+    <span class="header__title">connec+a</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <select class="lang-sel" id="lang-sel" onchange="setLang(this.value)">
+      <option value="ja">日本語</option><option value="en">English</option><option value="zh">中文</option>
+      <option value="ko">한국어</option><option value="es">Español</option><option value="fr">Français</option>
+      <option value="pt">Português</option><option value="id">Indonesia</option><option value="th">ภาษาไทย</option>
+      <option value="vi">Tiếng Việt</option><option value="ar">العربية</option><option value="hi">हिन्दी</option>
+      <option value="de">Deutsch</option><option value="it">Italiano</option><option value="ru">Русский</option>
+    </select>
+    <div class="season-dots">
+      <div class="sd" style="background:var(--haru);"></div>
+      <div class="sd" style="background:var(--natsu);"></div>
+      <div class="sd" style="background:var(--aki);"></div>
+      <div class="sd" style="background:var(--fuyu);"></div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="cache-bar" id="cache-bar">
+    <span class="cache-dot"></span><span id="cache-info"></span>
+  </div>
+
+  <div class="scan-card">
+    <div class="scan-viewport" id="viewport">
+      <video id="video" playsinline muted></video>
+      <canvas id="canvas" style="display:none;"></canvas>
+      <div class="scan-overlay">
+        <div class="scan-frame-wrap">
+          <div class="scan-frame"></div>
+          <div class="sf-c sf-tl"></div><div class="sf-c sf-tr"></div>
+          <div class="sf-c sf-bl"></div><div class="sf-c sf-br"></div>
+          <div class="scan-line"></div>
+        </div>
+      </div>
+    </div>
+    <div class="scan-status idle" id="scan-status" data-i18n="startCamera">カメラを起動してください</div>
+    <div class="btn-row">
+      <button id="btn-start" class="btn btn-shiro" style="flex:1;" data-i18n="startCamera">カメラを起動</button>
+      <button id="btn-stop"  class="btn btn-ghost" style="flex:1;display:none;" data-i18n="stopCamera">停止</button>
+    </div>
+    <div style="margin-top:14px;">
+      <p style="font-size:.72rem;color:rgba(255,255,255,.3);margin-bottom:7px;letter-spacing:.05em;" data-i18n="manualInput">手動入力</p>
+      <div style="display:flex;gap:8px;">
+        <input id="manual-input" class="form-control" type="text" placeholder="ParticipantID|EventID">
+        <button id="btn-manual" class="btn btn-ghost" style="flex:none;padding:10px 14px;" data-i18n="send">送信</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="history-card">
+    <div class="history-title" data-i18n="checkinHistory">受付履歴</div>
+    <div class="history-list" id="history-list">
+      <div class="history-empty" data-i18n="noHistory">まだ受付はありません</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const GAS_URL='https://script.google.com/macros/s/AKfycbw94iJOYloTfXOeOONgwyP3MlTXOBolUdSCFO57NyfYDr-0ISYMTLwntsQxinj5c8CsFA/exec';
+const I18N={
+  ja:{startCamera:'カメラを起動',stopCamera:'停止',manualInput:'手動入力',send:'送信',checkinHistory:'受付履歴',noHistory:'まだ受付はありません',scanning:'QRコードをかざしてください',sending:'送信中...',checkinOk:'チェックイン完了',alreadyIn:'入場済みです',payRequired:'支払い未確認',notFound:'登録が見つかりません',invalidQR:'QRコードが無効です',close:'閉じる',confirmPay:'支払い確認済み',cancelBtn:'キャンセル',paySteps:'お客様の支払いを確認してください。確認後「支払い確認済み」を押してください。',cacheLoaded:'件読込済 - 高速モード'},
+  en:{startCamera:'Start Camera',stopCamera:'Stop',manualInput:'Manual Input',send:'Send',checkinHistory:'Check-in History',noHistory:'No history yet',scanning:'Point QR code at camera',sending:'Sending...',checkinOk:'Check-in Complete',alreadyIn:'Already checked in',payRequired:'Payment not confirmed',notFound:'Registration not found',invalidQR:'Invalid QR code',close:'Close',confirmPay:'Payment Confirmed',cancelBtn:'Cancel',paySteps:'Please confirm the payment, then press "Payment Confirmed".',cacheLoaded:'records loaded - Fast Mode'},
+  zh:{startCamera:'启动摄像头',stopCamera:'停止',manualInput:'手动输入',send:'发送',checkinHistory:'签到记录',noHistory:'暂无记录',scanning:'请将QR码对准摄像头',sending:'发送中...',checkinOk:'签到成功',alreadyIn:'已签到',payRequired:'付款未确认',notFound:'未找到报名',invalidQR:'无效QR码',close:'关闭',confirmPay:'已确认付款',cancelBtn:'取消',paySteps:'请确认付款后按"已确认付款"。',cacheLoaded:'条记录已加载 - 快速模式'},
+  ko:{startCamera:'카메라 시작',stopCamera:'정지',manualInput:'수동 입력',send:'전송',checkinHistory:'체크인 기록',noHistory:'기록 없음',scanning:'QR코드를 카메라에 대주세요',sending:'전송 중...',checkinOk:'체크인 완료',alreadyIn:'이미 체크인됨',payRequired:'결제 미확인',notFound:'등록 없음',invalidQR:'유효하지 않은 QR',close:'닫기',confirmPay:'결제 확인됨',cancelBtn:'취소',paySteps:'결제를 확인한 후 "결제 확인됨"을 누르세요.',cacheLoaded:'건 로드 완료 - 고속 모드'},
+  es:{startCamera:'Iniciar Cámara',stopCamera:'Detener',manualInput:'Entrada Manual',send:'Enviar',checkinHistory:'Historial',noHistory:'Sin historial',scanning:'Apunta el QR a la cámara',sending:'Enviando...',checkinOk:'Check-in Completo',alreadyIn:'Ya ingresado',payRequired:'Pago no confirmado',notFound:'Registro no encontrado',invalidQR:'QR inválido',close:'Cerrar',confirmPay:'Pago Confirmado',cancelBtn:'Cancelar',paySteps:'Confirme el pago y pulse "Pago Confirmado".',cacheLoaded:'registros cargados - Modo Rápido'},
+  fr:{startCamera:'Démarrer la caméra',stopCamera:'Arrêter',manualInput:'Saisie manuelle',send:'Envoyer',checkinHistory:'Historique',noHistory:'Pas encore',scanning:'Pointez le QR vers la caméra',sending:'Envoi...',checkinOk:'Check-in effectué',alreadyIn:'Déjà entré',payRequired:'Paiement non confirmé',notFound:'Inscription introuvable',invalidQR:'QR invalide',close:'Fermer',confirmPay:'Paiement confirmé',cancelBtn:'Annuler',paySteps:'Confirmez le paiement puis appuyez sur "Paiement confirmé".',cacheLoaded:'enregistrements - Mode rapide'},
+  pt:{startCamera:'Iniciar Câmera',stopCamera:'Parar',manualInput:'Entrada Manual',send:'Enviar',checkinHistory:'Histórico',noHistory:'Sem histórico',scanning:'Aponte o QR para a câmera',sending:'Enviando...',checkinOk:'Check-in Completo',alreadyIn:'Já entrou',payRequired:'Pagamento não confirmado',notFound:'Registro não encontrado',invalidQR:'QR inválido',close:'Fechar',confirmPay:'Pagamento Confirmado',cancelBtn:'Cancelar',paySteps:'Confirme o pagamento e pressione "Pagamento Confirmado".',cacheLoaded:'registros carregados - Modo Rápido'},
+  id:{startCamera:'Mulai Kamera',stopCamera:'Hentikan',manualInput:'Input Manual',send:'Kirim',checkinHistory:'Riwayat',noHistory:'Belum ada',scanning:'Arahkan QR ke kamera',sending:'Mengirim...',checkinOk:'Check-in Selesai',alreadyIn:'Sudah masuk',payRequired:'Pembayaran belum dikonfirmasi',notFound:'Pendaftaran tidak ditemukan',invalidQR:'QR tidak valid',close:'Tutup',confirmPay:'Pembayaran Dikonfirmasi',cancelBtn:'Batal',paySteps:'Konfirmasi pembayaran lalu tekan "Pembayaran Dikonfirmasi".',cacheLoaded:'data dimuat - Mode Cepat'},
+  th:{startCamera:'เปิดกล้อง',stopCamera:'หยุด',manualInput:'ป้อนด้วยตนเอง',send:'ส่ง',checkinHistory:'ประวัติ',noHistory:'ยังไม่มีประวัติ',scanning:'ชี้ QR ไปที่กล้อง',sending:'กำลังส่ง...',checkinOk:'เช็คอินเสร็จสิ้น',alreadyIn:'เช็คอินแล้ว',payRequired:'ยังไม่ยืนยันการชำระเงิน',notFound:'ไม่พบการลงทะเบียน',invalidQR:'QR ไม่ถูกต้อง',close:'ปิด',confirmPay:'ยืนยันการชำระเงิน',cancelBtn:'ยกเลิก',paySteps:'ยืนยันการชำระเงินแล้วกด "ยืนยันการชำระเงิน"',cacheLoaded:'รายการโหลดแล้ว - โหมดเร็ว'},
+  vi:{startCamera:'Bật Camera',stopCamera:'Dừng',manualInput:'Nhập Thủ Công',send:'Gửi',checkinHistory:'Lịch sử',noHistory:'Chưa có',scanning:'Hướng QR vào camera',sending:'Đang gửi...',checkinOk:'Check-in Hoàn Tất',alreadyIn:'Đã vào',payRequired:'Chưa xác nhận thanh toán',notFound:'Không tìm thấy đăng ký',invalidQR:'QR không hợp lệ',close:'Đóng',confirmPay:'Đã Xác Nhận Thanh Toán',cancelBtn:'Hủy',paySteps:'Xác nhận thanh toán rồi nhấn "Đã Xác Nhận Thanh Toán".',cacheLoaded:'bản ghi đã tải - Chế độ nhanh'},
+  ar:{startCamera:'تشغيل الكاميرا',stopCamera:'إيقاف',manualInput:'إدخال يدوي',send:'إرسال',checkinHistory:'سجل الدخول',noHistory:'لا يوجد سجل',scanning:'وجّه رمز QR نحو الكاميرا',sending:'جارٍ الإرسال...',checkinOk:'تم تسجيل الدخول',alreadyIn:'دخل بالفعل',payRequired:'الدفع غير مؤكد',notFound:'التسجيل غير موجود',invalidQR:'رمز QR غير صالح',close:'إغلاق',confirmPay:'تم تأكيد الدفع',cancelBtn:'إلغاء',paySteps:'تأكد من الدفع ثم اضغط "تم تأكيد الدفع".',cacheLoaded:'سجل محمل - وضع سريع'},
+  hi:{startCamera:'कैमरा शुरू करें',stopCamera:'बंद करें',manualInput:'मैन्युअल इनपुट',send:'भेजें',checkinHistory:'चेक-इन इतिहास',noHistory:'अभी तक कोई इतिहास नहीं',scanning:'QR को कैमरे की ओर करें',sending:'भेजा जा रहा है...',checkinOk:'चेक-इन पूर्ण',alreadyIn:'पहले से प्रवेश',payRequired:'भुगतान अपुष्ट',notFound:'पंजीकरण नहीं मिला',invalidQR:'अमान्य QR',close:'बंद करें',confirmPay:'भुगतान की पुष्टि',cancelBtn:'रद्द करें',paySteps:'भुगतान की पुष्टि करें फिर "भुगतान की पुष्टि" दबाएं।',cacheLoaded:'रिकॉर्ड लोड - फास्ट मोड'},
+  de:{startCamera:'Kamera starten',stopCamera:'Stopp',manualInput:'Manuelle Eingabe',send:'Senden',checkinHistory:'Check-in Verlauf',noHistory:'Noch kein Verlauf',scanning:'QR-Code zur Kamera halten',sending:'Senden...',checkinOk:'Check-in abgeschlossen',alreadyIn:'Bereits eingecheckt',payRequired:'Zahlung nicht bestätigt',notFound:'Registrierung nicht gefunden',invalidQR:'Ungültiger QR',close:'Schließen',confirmPay:'Zahlung bestätigt',cancelBtn:'Abbrechen',paySteps:'Zahlung bestätigen, dann "Zahlung bestätigt" drücken.',cacheLoaded:'Einträge geladen - Schnellmodus'},
+  it:{startCamera:'Avvia fotocamera',stopCamera:'Ferma',manualInput:'Inserimento manuale',send:'Invia',checkinHistory:'Cronologia',noHistory:'Nessuna cronologia',scanning:'Punta il QR alla fotocamera',sending:'Invio...',checkinOk:'Check-in completato',alreadyIn:'Già entrato',payRequired:'Pagamento non confermato',notFound:'Registrazione non trovata',invalidQR:'QR non valido',close:'Chiudi',confirmPay:'Pagamento Confermato',cancelBtn:'Annulla',paySteps:'Conferma il pagamento poi premi "Pagamento Confermato".',cacheLoaded:'record caricati - Modalità rapida'},
+  ru:{startCamera:'Запустить камеру',stopCamera:'Стоп',manualInput:'Ручной ввод',send:'Отправить',checkinHistory:'История чек-ина',noHistory:'Нет истории',scanning:'Наведите QR на камеру',sending:'Отправка...',checkinOk:'Чек-ин выполнен',alreadyIn:'Уже вошёл',payRequired:'Оплата не подтверждена',notFound:'Регистрация не найдена',invalidQR:'Неверный QR',close:'Закрыть',confirmPay:'Оплата подтверждена',cancelBtn:'Отмена',paySteps:'Подтвердите оплату, затем нажмите "Оплата подтверждена".',cacheLoaded:'записей загружено - Быстрый режим'},
+};
+let lang=localStorage.getItem('lang')||'ja';
+function t(k){return(I18N[lang]||I18N.ja)[k]||(I18N.ja)[k]||k;}
+function setLang(l){lang=l;localStorage.setItem('lang',l);document.getElementById('lang-sel').value=l;applyI18n();}
+function applyI18n(){document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.dataset.i18n);});}
+document.getElementById('lang-sel').value=lang;
+
+async function api(a,p){p=p||{};const r=await fetch(GAS_URL,{method:'POST',redirect:'follow',headers:{'Content-Type':'text/plain'},body:JSON.stringify(Object.assign({action:a},p))});const j=await r.json();if(!j.success)throw new Error(j.error||'Error');return j.data;}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+let cache={},cacheReady=false;
+async function loadCache(){
+  try{const regs=await api('getAllRegistrations',{});cache={};regs.forEach(r=>{cache[r.ParticipantID+'|'+r.EventID]=r;});cacheReady=true;const bar=document.getElementById('cache-bar');bar.style.display='flex';document.getElementById('cache-info').textContent=regs.length+' '+t('cacheLoaded');}catch(e){console.warn(e);}
+}
+
+const video=document.getElementById('video');const canvas=document.getElementById('canvas');const ctx=canvas.getContext('2d');const statusEl=document.getElementById('scan-status');const viewport=document.getElementById('viewport');
+let videoStream=null,scanning=false,lastScan='',lastScanTime=0;
+
+function setStatus(tp,tx){statusEl.className='scan-status '+tp;statusEl.textContent=tx;}
+
+document.getElementById('btn-start').addEventListener('click',async()=>{
+  try{
+    videoStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:640},height:{ideal:640}}});
+    video.srcObject=videoStream;await video.play();
+    document.getElementById('btn-start').style.display='none';document.getElementById('btn-stop').style.display='';
+    viewport.classList.add('scanning');setStatus('idle',t('scanning'));
+    scanning=true;requestAnimationFrame(scanFrame);
+  }catch(err){setStatus('error',err.message);}
+});
+document.getElementById('btn-stop').addEventListener('click',()=>{
+  scanning=false;videoStream?.getTracks().forEach(t=>t.stop());videoStream=null;video.srcObject=null;
+  viewport.classList.remove('scanning');
+  document.getElementById('btn-start').style.display='';document.getElementById('btn-stop').style.display='none';
+  setStatus('idle',t('startCamera'));
+});
+function scanFrame(){
+  if(!scanning)return;requestAnimationFrame(scanFrame);
+  if(video.readyState!==video.HAVE_ENOUGH_DATA)return;
+  canvas.width=video.videoWidth;canvas.height=video.videoHeight;ctx.drawImage(video,0,0);
+  const code=jsQR(ctx.getImageData(0,0,canvas.width,canvas.height).data,canvas.width,canvas.height,{inversionAttempts:'dontInvert'});
+  if(code){const now=Date.now();if(code.data!==lastScan||now-lastScanTime>2000){lastScan=code.data;lastScanTime=now;processQr(code.data);}}
+}
+document.getElementById('btn-manual').addEventListener('click',()=>{const v=document.getElementById('manual-input').value.trim();if(v)processQr(v);});
+document.getElementById('manual-input').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('btn-manual').click();});
+
+let processing=false;
+async function processQr(qrData){
+  if(processing)return;processing=true;setStatus('sending',t('sending'));
+  try{
+    await api('saveLastScan',{qrData});
+    if(cacheReady&&!cache[qrData])throw new Error('NOT_REGISTERED');
+    const result=await api('checkin',{qrData});
+    if(cache[qrData])cache[qrData].CheckinStatus='TRUE';
+    showOverlay('success',result.name,result.rank,result.checkinTime);
+    addHistory(t('checkinOk')+' — '+result.name,result.checkinTime);
+    setStatus('ok',t('checkinOk')+' — '+result.name);
+  }catch(err){
+    const msg=err.message;
+    if(msg.startsWith('PAYMENT_REQUIRED')){showPaymentOverlay(qrData,msg.split(':')[1]);setStatus('warning',t('payRequired'));addHistory(t('payRequired'),new Date().toLocaleTimeString());}
+    else if(msg==='ALREADY_CHECKED_IN'){showErrOverlay(t('alreadyIn'));setStatus('error',t('alreadyIn'));addHistory(t('alreadyIn'),new Date().toLocaleTimeString());}
+    else if(msg==='NOT_REGISTERED'){showErrOverlay(t('notFound'));setStatus('error',t('notFound'));}
+    else{showErrOverlay(msg);setStatus('error',msg);}
+  }
+  processing=false;
+}
+
+// SVGアイコン
+const ICON_OK  ='<svg viewBox="0 0 24 24" fill="none" stroke="#8ecf94" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+const ICON_ERR ='<svg viewBox="0 0 24 24" fill="none" stroke="#f4916a" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+const ICON_WARN='<svg viewBox="0 0 24 24" fill="none" stroke="#e8c84a" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>';
+
+function showOverlay(type,name,rank,time){
+  const o=document.createElement('div');o.className='overlay';
+  o.innerHTML=
+    '<div class="result-card success">'+
+      '<div class="result-icon result-icon-ok">'+ICON_OK+'</div>'+
+      '<div class="result-name">'+esc(name)+'</div>'+
+      '<div class="result-sub">'+esc(rank)+'&emsp;'+esc(time||'')+'</div>'+
+      '<button class="btn btn-ghost" style="width:100%;" onclick="this.closest(\'.overlay\').remove()">'+t('close')+'</button>'+
+    '</div>';
+  document.body.appendChild(o);o.addEventListener('click',e=>{if(e.target===o)o.remove();});setTimeout(()=>o.remove(),3000);
+}
+function showErrOverlay(msg){
+  const o=document.createElement('div');o.className='overlay';
+  o.innerHTML=
+    '<div class="result-card error">'+
+      '<div class="result-icon result-icon-err">'+ICON_ERR+'</div>'+
+      '<div class="result-name">'+esc(msg)+'</div>'+
+      '<button class="btn btn-ghost" style="width:100%;margin-top:8px;" onclick="this.closest(\'.overlay\').remove()">'+t('close')+'</button>'+
+    '</div>';
+  document.body.appendChild(o);o.addEventListener('click',e=>{if(e.target===o)o.remove();});setTimeout(()=>o.remove(),3000);
+}
+function showPaymentOverlay(qrData,registrationId){
+  const o=document.createElement('div');o.className='overlay';
+  o.innerHTML=
+    '<div class="result-card warning">'+
+      '<div class="result-icon result-icon-warn">'+ICON_WARN+'</div>'+
+      '<div class="result-name">'+t('payRequired')+'</div>'+
+      '<div class="payment-steps">'+t('paySteps')+'</div>'+
+      '<div class="payment-btn-row">'+
+        '<button class="btn btn-matcha" style="flex:1;" id="btn-cp">'+t('confirmPay')+'</button>'+
+        '<button class="btn btn-ghost"  style="flex:1;" id="btn-cc">'+t('cancelBtn')+'</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(o);
+  o.querySelector('#btn-cp').addEventListener('click',async()=>{
+    o.querySelector('#btn-cp').textContent='...';o.querySelector('#btn-cp').disabled=true;
+    try{
+      await api('updatePaymentStatus',{registrationId,status:'CASH'});if(cache[qrData])cache[qrData].PaymentStatus='CASH';
+      const result=await api('checkin',{qrData});if(cache[qrData])cache[qrData].CheckinStatus='TRUE';
+      o.remove();showOverlay('success',result.name,result.rank,result.checkinTime);
+      addHistory(t('checkinOk')+' — '+result.name,result.checkinTime);setStatus('ok',t('checkinOk')+' — '+result.name);
+    }catch(err){alert(err.message);o.querySelector('#btn-cp').textContent=t('confirmPay');o.querySelector('#btn-cp').disabled=false;}
+  });
+  o.querySelector('#btn-cc').addEventListener('click',()=>{o.remove();setStatus('idle',t('scanning'));});
+}
+
+const histEl=document.getElementById('history-list');
+function addHistory(status,time){
+  const item=document.createElement('div');item.className='history-item';
+  item.innerHTML='<span>'+esc(status)+'</span><span class="history-time">'+esc(time)+'</span>';
+  if(histEl.children.length===1&&histEl.children[0].className==='history-empty')histEl.innerHTML='';
+  histEl.prepend(item);
+}
+
+applyI18n();loadCache();
+</script>
+</body>
+</html>
